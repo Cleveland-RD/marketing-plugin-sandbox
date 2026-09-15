@@ -1,0 +1,83 @@
+name: evals
+
+# The review gate for skills the builder agent proposes. A maintainer reads the
+# diff; this decides whether the skill actually behaves. Both are required.
+#
+# Runs on its own API credential, never a person's subscription, so a slow suite
+# can never consume someone's interactive limit. Every run carries a hard cost
+# ceiling: the suite aborts rather than draining the balance.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - 'evals/**'
+      - '.claude-plugin/**'
+      - 'brand/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate the plugin
+        run: claude plugin validate .
+
+      - name: Run every eval suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ ! -d evals ]; then
+            echo "No evals/ directory. A skill without test cases should not be merged."
+            exit 1
+          fi
+          failed=0
+          for dir in evals/*/; do
+            name="$(basename "$dir")"
+            [ "$name" = "results" ] && continue
+            echo "::group::$name"
+            # --runs 1 and --ablation none keep the bill to one session per case.
+            # --threshold 1.0 is the default: any case below full marks fails.
+            if claude plugin eval . \
+                 --eval-dir "evals/$name" \
+                 --trust-plugin \
+                 --runs 1 \
+                 --ablation none \
+                 --allow-tools Write \
+                 --max-cost-usd 1.00 \
+                 --no-publish; then
+              echo "$name passed"
+            else
+              echo "$name FAILED"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: evals/*/results/**
+          if-no-files-found: ignore
+          retention-days: 14
