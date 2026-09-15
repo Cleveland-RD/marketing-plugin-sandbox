@@ -1,8 +1,14 @@
 {
   "name": "harbourline-marketing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Synthetic marketing plugin used by the Cleveland & Co skill-builder pilot. Everything here describes a fictional company and exists to exercise the authoring, review and release path. Not firm content.",
-  "author": { "name": "Cleveland & Co" },
+  "author": {
+    "name": "Cleveland & Co"
+  },
   "license": "Apache-2.0",
-  "keywords": ["pilot", "synthetic", "marketing"]
+  "keywords": [
+    "pilot",
+    "synthetic",
+    "marketing"
+  ]
 }
